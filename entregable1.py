@@ -1,6 +1,7 @@
 import pulp as plp
 import math
 import itertools
+import time
 from pathlib import Path
 
 import matplotlib
@@ -40,70 +41,70 @@ model = plp.LpProblem("CVRP_10", plp.LpMinimize)
 # 2. Parameters and variables
 N = sorted(coords)                          # nodes (1 = depot)
 C = [i for i in N if i != 1]                # customers
-K = list(range(1, len(C) + 1))              # vehicles: at most one per customer
-A = list(itertools.permutations(N, 2))      # edges
+A = list(itertools.permutations(N, 2))      # arcs
 
-# Euclidean distance (eq. 1)
+# (1) Euclidean distance rounded to nearest integer
 d = {(i, j): math.floor(math.dist(coords[i], coords[j]) + 0.5) for (i, j) in A}
 
-x = plp.LpVariable.dicts("x", [(i, j, k) for (i, j) in A for k in K], cat="Binary")
+# Minimum number of vehicles
+K_min = math.ceil(sum(q[i] for i in C) / Q)
+
+# (2), (11) Binary routing variables
+x = plp.LpVariable.dicts("x", A, cat="Binary")
+# (3) Accumulated load when leaving customer i
 u = plp.LpVariable.dicts("u", C, lowBound=0, upBound=Q)
 
-# 3. Objective function (eq. 4)
-model += plp.lpSum(d[i, j] * x[i, j, k] for k in K for (i, j) in A), "Objective_Function"
+# 3. Objective function
+# (4) Minimize total distance
+model += plp.lpSum(d[a] * x[a] for a in A), "Objective_Function"
 
 # 4. Constraints
-# (5) Each customer has exactly one predecessor
+# (5), (6) Each customer has exactly one predecessor and one successor
 for j in C:
-    model += plp.lpSum(x[i, j, k] for k in K for i in N if i != j) == 1, f"Pred_{j}"
+    model += plp.lpSum(x[i, j] for i in N if i != j) == 1, f"In_{j}"
+    model += plp.lpSum(x[j, i] for i in N if i != j) == 1, f"Out_{j}"
 
-# (6) Flow conservation: what enters h must leave h
-for h in N:
-    for k in K:
-        model += (plp.lpSum(x[i, h, k] for i in N if i != h)
-                  - plp.lpSum(x[h, j, k] for j in N if j != h) == 0), f"Flow_{h}_{k}"
+# (6) Depot: as many vehicles leave as return
+model += (plp.lpSum(x[1, j] for j in C) == plp.lpSum(x[j, 1] for j in C)), "Depot_Flow"
 
-# (7) Each vehicle leaves the depot at most once
-for k in K:
-    model += plp.lpSum(x[1, j, k] for j in C) <= 1, f"Departure_{k}"
+# (7) At least K_min vehicles leave the depot
+model += plp.lpSum(x[1, j] for j in C) >= K_min, "Min_Vehicles"
 
-# Symmetry breaking: vehicle k is used only if vehicle k-1 is used
-for k in K[1:]:
-    model += plp.lpSum(x[1, j, k] for j in C) <= plp.lpSum(x[1, j, k - 1] for j in C), f"Sym_{k}"
-
-# (8) Capacity per vehicle
-for k in K:
-    model += plp.lpSum(q[j] * x[i, j, k] for i in N for j in C if i != j) <= Q, f"Cap_{k}"
-
-# (9) MTZ: subtour elimination
+# (8), (9) Lifted MTZ (Desrochers-Laporte)
 for i in C:
     for j in C:
         if i != j:
-            model += (u[j] >= u[i] + q[j] - Q * (1 - plp.lpSum(x[i, j, k] for k in K))), f"MTZ_{i}_{j}"
+            model += (u[j] >= u[i] + q[j] - Q * (1 - x[i, j])
+                      + (Q - q[i] - q[j]) * x[j, i]), f"MTZ_{i}_{j}"
 
 # (10) Bounds on accumulated load
 for i in C:
     model += u[i] >= q[i], f"u_min_{i}"
 
 # 5. Solve
+start = time.time()
 model.solve(plp.PULP_CBC_CMD(msg=False))
+elapsed = time.time() - start
 
 # 6. Results
 print(f"Status: {plp.LpStatus[model.status]}")
 print(f"Minimum distance Z = {plp.value(model.objective)}")
+print(f"Solve time: {elapsed:.2f} s")
+
+succ = {i: j for (i, j) in A if i != 1 and x[i, j].varValue > 0.5}
+starts = [j for j in C if x[1, j].varValue > 0.5]
+
 routes = {}
-for k in K:
-    nxt = {i: j for (i, j) in A if x[i, j, k].varValue > 0.5}
-    if 1 not in nxt:
-        continue
-    route, node = [1], nxt[1]
-    while node != 1:
+for k, first in enumerate(starts, 1):
+    route, node = [1, first], first
+    while succ[node] != 1:
+        node = succ[node]
         route.append(node)
-        node = nxt[node]
     route.append(1)
     routes[k] = route
-    load = sum(q[i] for i in route)
-    print(f"Vehicle {k}: {' -> '.join(map(str, route))}  (load {load}/{Q})")
+    load = sum(q[i] for i in route if i != 1)
+    dist = sum(d[route[t], route[t + 1]] for t in range(len(route) - 1))
+    print(f"Vehicle {k}: {' -> '.join(map(str, route))}  (load {load}/{Q}, distance {dist})")
 
 
 # 7. Plots
