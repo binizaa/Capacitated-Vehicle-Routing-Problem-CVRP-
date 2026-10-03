@@ -20,10 +20,12 @@ The script prints the solution and writes the plots to `img/`.
 
 ```
 Status: Optimal
-Minimum distance Z = 337.0
-Vehicle 1: 1 -> 9 -> 5 -> 4 -> 10 -> 1  (load 49/50)
-Vehicle 2: 1 -> 2 -> 3 -> 11 -> 1  (load 47/50)
-Vehicle 3: 1 -> 6 -> 7 -> 8 -> 1  (load 50/50)
+Minimum distance Z = 317.0
+Solve time: 1.52 s
+Vehicle 1: 1 -> 3 -> 2 -> 6 -> 1  (load 44/50, distance 100)
+Vehicle 2: 1 -> 9 -> 8 -> 7 -> 1  (load 47/50, distance 108)
+Vehicle 3: 1 -> 10 -> 1  (load 13/50, distance 22)
+Vehicle 4: 1 -> 11 -> 5 -> 4 -> 1  (load 42/50, distance 87)
 ```
 
 | Nodes | Optimal routes |
