@@ -40,7 +40,7 @@ model = plp.LpProblem("CVRP_10", plp.LpMinimize)
 # 2. Parameters and variables
 N = sorted(coords)                          # nodes (1 = depot)
 C = [i for i in N if i != 1]                # customers
-K = [1, 2, 3]                               # vehicles
+K = list(range(1, len(C) + 1))              # vehicles: at most one per customer
 A = list(itertools.permutations(N, 2))      # edges
 
 # Euclidean distance (eq. 1)
@@ -67,6 +67,10 @@ for h in N:
 for k in K:
     model += plp.lpSum(x[1, j, k] for j in C) <= 1, f"Departure_{k}"
 
+# Symmetry breaking: vehicle k is used only if vehicle k-1 is used
+for k in K[1:]:
+    model += plp.lpSum(x[1, j, k] for j in C) <= plp.lpSum(x[1, j, k - 1] for j in C), f"Sym_{k}"
+
 # (8) Capacity per vehicle
 for k in K:
     model += plp.lpSum(q[j] * x[i, j, k] for i in N for j in C if i != j) <= Q, f"Cap_{k}"
@@ -91,7 +95,6 @@ routes = {}
 for k in K:
     nxt = {i: j for (i, j) in A if x[i, j, k].varValue > 0.5}
     if 1 not in nxt:
-        print(f"Vehicle {k}: unused")
         continue
     route, node = [1], nxt[1]
     while node != 1:

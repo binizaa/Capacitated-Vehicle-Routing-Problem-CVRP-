@@ -1,22 +1,9 @@
-# CVRP_10 — Capacitated Vehicle Routing Problem (exact MILP)
+# Capacitated Vehicle Routing Problem
 
-Exact solution of a small, didactic CVRP instance (1 depot + 10 customers, 3 vehicles,
-capacity 50) using a Mixed-Integer Linear Programming model solved with PuLP + CBC.
+Didactic CVRP instance: 1 depot, 10 customers and
+capacity 50 using a Mixed-Integer Linear Programming model solved with PuLP + CBC.
 
-> 📄 **The full explanation of the mathematical model** (sets, parameters, decision
-> variables, objective function and constraints, eqs. 1–10) **is in [`main.pdf`](main.pdf).**
-> The comments in `entregable1.py` reference the same equation numbers.
-
-## Repository contents
-
-| File | Description |
-|------|-------------|
-| `main.pdf` | Report with the formulation and explanation of the model |
-| `entregable1.py` | PuLP implementation of the model, solution extraction and plots |
-| `NAME _CVRP_10_manual.txt` | Instance in TSPLIB/CVRPLIB format (coordinates, demands, capacity) |
-| `img/nodes.png` | Plot of the nodes (square = depot) |
-| `img/routes.png` | Plot of the optimal routes |
-| `requirements.txt` | Python dependencies |
+The full explanation of the mathematical model is in [`main.pdf`](main.pdf). The comments in `entregable1.py` reference the same equation numbers.
 
 ## Model summary
 
