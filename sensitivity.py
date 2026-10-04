@@ -5,100 +5,21 @@ meaningful for the integer optimum. Instead, every experiment re-solves the
 model while varying one parameter and records Z* and the route structure.
 """
 import csv
-import itertools
 import math
 import random
-import time
 from pathlib import Path
-
-import pulp as plp
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from cvrp_model import distances, read_cvrp, solve_cvrp
 
 ROOT = Path(__file__).parent
 IMG_DIR = ROOT / "img"
 OUT_DIR = ROOT / "results"
 IMG_DIR.mkdir(exist_ok=True)
 OUT_DIR.mkdir(exist_ok=True)
-
-
-def read_cvrp(path):
-    coords, q, Q = {}, {}, None
-    section = None
-    for line in Path(path).read_text().splitlines():
-        line = line.strip()
-        if not line or line == "EOF":
-            continue
-        if line.startswith("CAPACITY"):
-            Q = int(line.split(":")[1])
-        elif line.endswith("_SECTION"):
-            section = line
-        elif section == "NODE_COORD_SECTION":
-            i, a, b = line.split()
-            coords[int(i)] = (float(a), float(b))
-        elif section == "DEMAND_SECTION":
-            i, dem = line.split()
-            q[int(i)] = int(dem)
-    return coords, q, Q
-
-
-def distances(coords):
-    return {(i, j): math.floor(math.dist(coords[i], coords[j]) + 0.5)
-            for (i, j) in itertools.permutations(coords, 2)}
-
-
-def solve_cvrp(coords, q, Q, K_exact=None, time_limit=120):
-    """Same formulation as entregable1.py (eqs. 1-11). If K_exact is given,
-    constraint (7) becomes an equality that fixes the fleet size."""
-    N = sorted(coords)
-    C = [i for i in N if i != 1]
-    A = list(itertools.permutations(N, 2))
-    d = distances(coords)
-
-    if max(q[i] for i in C) > Q:
-        return {"status": "Infeasible", "Z": None, "routes": [], "time": 0.0}
-
-    K_min = math.ceil(sum(q[i] for i in C) / Q)
-    model = plp.LpProblem("CVRP", plp.LpMinimize)
-    x = plp.LpVariable.dicts("x", A, cat="Binary")
-    u = plp.LpVariable.dicts("u", C, lowBound=0, upBound=Q)
-
-    model += plp.lpSum(d[a] * x[a] for a in A)
-    for j in C:
-        model += plp.lpSum(x[i, j] for i in N if i != j) == 1
-        model += plp.lpSum(x[j, i] for i in N if i != j) == 1
-    model += plp.lpSum(x[1, j] for j in C) == plp.lpSum(x[j, 1] for j in C)
-    if K_exact is None:
-        model += plp.lpSum(x[1, j] for j in C) >= K_min
-    else:
-        model += plp.lpSum(x[1, j] for j in C) == K_exact
-    for i in C:
-        for j in C:
-            if i != j:
-                model += (u[j] >= u[i] + q[j] - Q * (1 - x[i, j])
-                          + (Q - q[i] - q[j]) * x[j, i])
-    for i in C:
-        model += u[i] >= q[i]
-
-    start = time.time()
-    model.solve(plp.PULP_CBC_CMD(msg=False, timeLimit=time_limit))
-    elapsed = time.time() - start
-    status = plp.LpStatus[model.status]
-    if status != "Optimal":
-        return {"status": status, "Z": None, "routes": [], "time": elapsed}
-
-    succ = {i: j for (i, j) in A if i != 1 and x[i, j].varValue > 0.5}
-    routes = []
-    for first in (j for j in C if x[1, j].varValue > 0.5):
-        route, node = [1, first], first
-        while succ[node] != 1:
-            node = succ[node]
-            route.append(node)
-        routes.append(route + [1])
-    return {"status": status, "Z": round(plp.value(model.objective)),
-            "routes": routes, "time": elapsed}
 
 
 def route_cost(routes, d):
